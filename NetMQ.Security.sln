@@ -1,16 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.4
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "NetMQ.Security", "src\NetMQ.Security\NetMQ.Security.xproj", "{97521CA7-22C0-4D4D-84D1-174CAB6708BB}"
-EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "NetMQ.Security.Tests", "tests\NetMQ.Security.Tests\NetMQ.Security.Tests.xproj", "{1569A4DF-4FE3-4DAD-A906-3E6F418B351C}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{338CCF4A-51D8-4183-96E9-6A2DE71CE50A}"
-	ProjectSection(SolutionItems) = preProject
-		global.json = global.json
-	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetMQ.Security", "src\NetMQ.Security\NetMQ.Security.csproj", "{97521CA7-22C0-4D4D-84D1-174CAB6708BB}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetMQ.Security.Tests", "tests\NetMQ.Security.Tests\NetMQ.Security.Tests.csproj", "{1569A4DF-4FE3-4DAD-A906-3E6F418B351C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

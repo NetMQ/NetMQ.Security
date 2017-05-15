@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard1.6</TargetFramework>
+    <AssemblyName>NetMQ.Security</AssemblyName>
+    <AssemblyOriginatorKeyFile>../../NetMQ.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+    <DelaySign>False</DelaySign>
+    <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>
+    <PackageId>NetMQ.Security</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="V0_1\ReadOnlySeekableNetMQMessageStream.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetMQ" Version="4.0.0.1" />
+    <PackageReference Include="JetBrains.Annotations" Version="10.4.0">
+      <PrivateAssets>All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--<ItemGroup Condition=" '$(TargetFramework)' == 'net40' ">
+    <Reference Include="System" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>-->
+
+</Project>
