@@ -40,8 +40,9 @@ namespace NetMQ.Security.V0_1.HandshakeMessages
 
             byte[] certificateBytes = certificateFrame.ToByteArray();
 
-            Certificate = new X509Certificate2();
-            Certificate.Import(certificateBytes);
+            Certificate = new X509Certificate2(certificateBytes);
+            //Certificate = new X509Certificate2();
+            //Certificate.Import(certificateBytes);
         }
 
         /// <summary>

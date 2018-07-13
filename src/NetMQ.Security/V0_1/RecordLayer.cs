@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 
@@ -20,8 +21,10 @@ namespace NetMQ.Security.V0_1
         private SymmetricAlgorithm m_decryptionBulkAlgorithm;
         private SymmetricAlgorithm m_encryptionBulkAlgorithm;
 
-        private HMAC m_decryptionHMAC;
-        private HMAC m_encryptionHMAC;
+        //private HMAC m_decryptionHMAC;
+        private IncrementalHash m_decryptionHMAC;
+        //private HMAC m_encryptionHMAC;
+        private IncrementalHash m_encryptionHMAC;
 
         private ulong m_sequenceNumber = 0;
 
@@ -101,20 +104,20 @@ namespace NetMQ.Security.V0_1
             GenerateKeys(out clientMAC, out serverMAC, out clientEncryptionKey, out serverEncryptionKey);
 
             if (SecurityParameters.BulkCipherAlgorithm == BulkCipherAlgorithm.AES)
-            {
-                m_decryptionBulkAlgorithm = new AesCryptoServiceProvider
-                {
-                    Padding = PaddingMode.None,
-                    KeySize = SecurityParameters.EncKeyLength*8,
-                    BlockSize = SecurityParameters.BlockLength*8
-                };
+            {   
+                m_decryptionBulkAlgorithm = Aes.Create(); //new AesCryptoServiceProvider
+                                                          //{
+                m_decryptionBulkAlgorithm.Padding = PaddingMode.None;
+                m_decryptionBulkAlgorithm.KeySize = SecurityParameters.EncKeyLength * 8;
+                m_decryptionBulkAlgorithm.BlockSize = SecurityParameters.BlockLength * 8;
+                //};
 
-                m_encryptionBulkAlgorithm = new AesCryptoServiceProvider
-                {
-                    Padding = PaddingMode.None,
-                    KeySize = SecurityParameters.EncKeyLength*8,
-                    BlockSize = SecurityParameters.BlockLength*8
-                };
+                m_encryptionBulkAlgorithm = Aes.Create(); //new AesCryptoServiceProvider
+                                                          //{
+                m_encryptionBulkAlgorithm.Padding = PaddingMode.None;
+                m_encryptionBulkAlgorithm.KeySize = SecurityParameters.EncKeyLength * 8;
+                m_encryptionBulkAlgorithm.BlockSize = SecurityParameters.BlockLength * 8;
+                //};
 
                 if (SecurityParameters.Entity == ConnectionEnd.Client)
                 {
@@ -136,26 +139,26 @@ namespace NetMQ.Security.V0_1
             {
                 if (SecurityParameters.Entity == ConnectionEnd.Client)
                 {
-                    m_encryptionHMAC = new HMACSHA1(clientMAC);
-                    m_decryptionHMAC = new HMACSHA1(serverMAC);
+                    m_encryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA1, clientMAC); //new HMACSHA1(clientMAC);
+                    m_decryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA1, serverMAC); //new HMACSHA1(serverMAC);
                 }
                 else
                 {
-                    m_encryptionHMAC = new HMACSHA1(serverMAC);
-                    m_decryptionHMAC = new HMACSHA1(clientMAC);
+                    m_encryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA1, serverMAC); //new HMACSHA1(serverMAC);
+                    m_decryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA1, clientMAC); //new HMACSHA1(clientMAC);
                 }
             }
             else if (SecurityParameters.MACAlgorithm == MACAlgorithm.HMACSha256)
             {
                 if (SecurityParameters.Entity == ConnectionEnd.Client)
                 {
-                    m_encryptionHMAC = new HMACSHA256(clientMAC);
-                    m_decryptionHMAC = new HMACSHA256(serverMAC);
+                    m_encryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, clientMAC); //ew HMACSHA256(clientMAC);
+                    m_decryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, serverMAC); //new HMACSHA256(serverMAC);
                 }
                 else
                 {
-                    m_encryptionHMAC = new HMACSHA256(serverMAC);
-                    m_decryptionHMAC = new HMACSHA256(clientMAC);
+                    m_encryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, serverMAC); // new HMACSHA256(serverMAC);
+                    m_decryptionHMAC = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, clientMAC); // new HMACSHA256(clientMAC);
                 }
             }
             else
@@ -248,18 +251,25 @@ namespace NetMQ.Security.V0_1
 
             if (SecurityParameters.MACAlgorithm != MACAlgorithm.Null)
             {
-                byte[] versionAndType = new[] { (byte)contentType, m_protocolVersion[0], m_protocolVersion[1] };
                 byte[] seqNumBytes = BitConverter.GetBytes(seqNum);
+                byte[] versionAndType = new[] { (byte)contentType, m_protocolVersion[0], m_protocolVersion[1] };
                 byte[] messageSize = BitConverter.GetBytes(plainBytes.Length);
                 byte[] frameIndexBytes = BitConverter.GetBytes(frameIndex);
+                
+                //m_encryptionHMAC.Initialize();
+                //m_encryptionHMAC.TransformBlock(seqNumBytes, 0, seqNumBytes.Length, seqNumBytes, 0);
+                //m_encryptionHMAC.TransformBlock(versionAndType, 0, versionAndType.Length, versionAndType, 0);
+                //m_encryptionHMAC.TransformBlock(messageSize, 0, messageSize.Length, messageSize, 0);
+                //m_encryptionHMAC.TransformBlock(frameIndexBytes, 0, frameIndexBytes.Length, frameIndexBytes, 0);
+                //m_encryptionHMAC.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+                //mac = m_encryptionHMAC.Hash;
 
-                m_encryptionHMAC.Initialize();
-                m_encryptionHMAC.TransformBlock(seqNumBytes, 0, seqNumBytes.Length, seqNumBytes, 0);
-                m_encryptionHMAC.TransformBlock(versionAndType, 0, versionAndType.Length, versionAndType, 0);
-                m_encryptionHMAC.TransformBlock(messageSize, 0, messageSize.Length, messageSize, 0);
-                m_encryptionHMAC.TransformBlock(frameIndexBytes, 0, frameIndexBytes.Length, frameIndexBytes, 0);
-                m_encryptionHMAC.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
-                mac = m_encryptionHMAC.Hash;
+                m_encryptionHMAC.AppendData(seqNumBytes);
+                m_encryptionHMAC.AppendData(versionAndType);
+                m_encryptionHMAC.AppendData(messageSize);
+                m_encryptionHMAC.AppendData(frameIndexBytes);
+                m_encryptionHMAC.AppendData(plainBytes);
+                mac = m_encryptionHMAC.GetHashAndReset();
             }
             else
             {
@@ -439,19 +449,28 @@ namespace NetMQ.Security.V0_1
         {
             if (SecurityParameters.MACAlgorithm != MACAlgorithm.Null)
             {
-                byte[] versionAndType = new[] { (byte)contentType, m_protocolVersion[0], m_protocolVersion[1] };
                 byte[] seqNumBytes = BitConverter.GetBytes(seqNum);
+                byte[] versionAndType = new[] { (byte)contentType, m_protocolVersion[0], m_protocolVersion[1] };
                 byte[] messageSize = BitConverter.GetBytes(plainBytes.Length);
                 byte[] frameIndexBytes = BitConverter.GetBytes(frameIndex);
 
-                m_decryptionHMAC.Initialize();
-                m_decryptionHMAC.TransformBlock(seqNumBytes, 0, seqNumBytes.Length, seqNumBytes, 0);
-                m_decryptionHMAC.TransformBlock(versionAndType, 0, versionAndType.Length, versionAndType, 0);
-                m_decryptionHMAC.TransformBlock(messageSize, 0, messageSize.Length, messageSize, 0);
-                m_decryptionHMAC.TransformBlock(frameIndexBytes, 0, frameIndexBytes.Length, frameIndexBytes, 0);
-                m_decryptionHMAC.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+                //m_decryptionHMAC.Initialize();
+                //m_decryptionHMAC.TransformBlock(seqNumBytes, 0, seqNumBytes.Length, seqNumBytes, 0);
+                //m_decryptionHMAC.TransformBlock(versionAndType, 0, versionAndType.Length, versionAndType, 0);
+                //m_decryptionHMAC.TransformBlock(messageSize, 0, messageSize.Length, messageSize, 0);
+                //m_decryptionHMAC.TransformBlock(frameIndexBytes, 0, frameIndexBytes.Length, frameIndexBytes, 0);
+                //m_decryptionHMAC.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
 
-                if (!m_decryptionHMAC.Hash.SequenceEqual(mac))
+                //var hash = m_decryptionHMAC.Hash;
+
+                m_decryptionHMAC.AppendData(seqNumBytes);
+                m_decryptionHMAC.AppendData(versionAndType);
+                m_decryptionHMAC.AppendData(messageSize);
+                m_decryptionHMAC.AppendData(frameIndexBytes);
+                m_decryptionHMAC.AppendData(plainBytes);
+                var hash = m_decryptionHMAC.GetHashAndReset();
+
+                if (!hash.SequenceEqual(mac))
                 {
                     throw new NetMQSecurityException(NetMQSecurityErrorCode.MACNotMatched, "MAC does not match message");
                 }

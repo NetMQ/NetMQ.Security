@@ -52,18 +52,20 @@ namespace NetMQ.Security.V0_1
         /// This is the local hash-calculator, as opposed to the hash-calculator for the remote-peer.
         /// It uses the SHA-256 algorithm (SHA stands for Standard Hashing Algorithm).
         /// </summary>
-        private SHA256 m_localHash;
+        private IncrementalHash m_localHash;
+        private byte[] m_localHashBytes;
 
         /// <summary>
         /// This is the hash-calculator for the remote peer.
         /// It uses the SHA-256 algorithm (SHA stands for Standard Hashing Algorithm).
         /// </summary>
-        private SHA256 m_remoteHash;
+        private IncrementalHash m_remoteHash;
+        private byte[] m_remoteHashBytes;
 
         /// <summary>
         /// This is the random-number-generator that is used to create cryptographically-strong random byte-array data.
         /// </summary>
-        private RandomNumberGenerator m_rng = new RNGCryptoServiceProvider();
+        private RandomNumberGenerator m_rng = RandomNumberGenerator.Create(); //new RNGCryptoServiceProvider();
 
         /// <summary>
         /// This flag indicates when the handshake has finished. It is set true in method OnFinished.
@@ -76,6 +78,7 @@ namespace NetMQ.Security.V0_1
         /// </summary>
         private IPRF m_prf = new SHA256PRF();
 
+        
         /// <summary>
         /// Create a new HandshakeLayer object given a SecureChannel and which end of the connection it is to be.
         /// </summary>
@@ -84,8 +87,8 @@ namespace NetMQ.Security.V0_1
         public HandshakeLayer(SecureChannel secureChannel, ConnectionEnd connectionEnd)
         {
             // SHA256 is a class that computes the SHA-256 (SHA stands for Standard Hashing Algorithm) of it's input.
-            m_localHash = SHA256.Create();
-            m_remoteHash = SHA256.Create();
+            m_localHash =  IncrementalHash.CreateHash(HashAlgorithmName.SHA256);//SHA256.Create();
+            m_remoteHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);// SHA256.Create();
 
             m_secureChannel = secureChannel;
             SecurityParameters = new SecurityParameters
@@ -104,7 +107,8 @@ namespace NetMQ.Security.V0_1
                 CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA
             };
 
-            VerifyCertificate = c => c.Verify();
+#warning This method is not available in .NETStandard 1.6 - planned for 2.0; using X509Chain for now as it has the same functionality in NetFx, where X509Certificate2.Verify() calls the same internal method as X509Chain().Build(c)
+            VerifyCertificate = c => new X509Chain().Build(c); //c.Verify();
         }
 
         public SecurityParameters SecurityParameters { get; }
@@ -213,7 +217,7 @@ namespace NetMQ.Security.V0_1
         /// <param name="message">the NetMQMessage whose frames are to be hashed</param>
         private void HashLocal(NetMQMessage message)
         {
-            Hash(m_localHash, message);
+            m_localHashBytes = Hash(m_localHash, message); //m_localHash.ComputeHash(message.ToStream());
         }
 
         /// <summary>
@@ -223,7 +227,7 @@ namespace NetMQ.Security.V0_1
         /// <param name="message">the NetMQMessage whose frames are to be hashed</param>
         private void HashRemote(NetMQMessage message)
         {
-            Hash(m_remoteHash, message);
+            m_remoteHashBytes = Hash(m_remoteHash, message);
         }
 
         /// <summary>
@@ -231,7 +235,7 @@ namespace NetMQ.Security.V0_1
         /// </summary>
         /// <param name="hash">the hashing-algorithm to employ</param>
         /// <param name="message">the NetMQMessage whose frames are to be hashed</param>
-        private static void Hash(HashAlgorithm hash, NetMQMessage message)
+        private static byte[] Hash(IncrementalHash hash, NetMQMessage message)
         {
             foreach (var frame in message)
             {
@@ -240,8 +244,11 @@ namespace NetMQ.Security.V0_1
 
                 // Compute the hash value for the region of the input byte-array (bytes), starting at index 0,
                 // and copy the resulting hash value back into the same byte-array.
-                hash.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
+                //hash.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
+                hash.AppendData(bytes);
             }
+
+            return hash.GetHashAndReset();
         }
 
         private void OnHelloRequest(OutgoingMessageBag outgoingMessages)
@@ -397,8 +404,10 @@ namespace NetMQ.Security.V0_1
             var premasterSecret = new byte[ClientKeyExchangeMessage.PreMasterSecretLength];
             m_rng.GetBytes(premasterSecret);
 
-            var rsa = RemoteCertificate.PublicKey.Key as RSACryptoServiceProvider;
-            clientKeyExchangeMessage.EncryptedPreMasterSecret = rsa.Encrypt(premasterSecret, false);
+            using (var rsa = RemoteCertificate.GetRSAPublicKey()) // .PublicKey.Key as RSA; //RSACryptoServiceProvider;
+            {
+                clientKeyExchangeMessage.EncryptedPreMasterSecret = rsa.Encrypt(premasterSecret, RSAEncryptionPadding.Pkcs1); // false);
+            }
 
             GenerateMasterSecret(premasterSecret);
 
@@ -421,12 +430,12 @@ namespace NetMQ.Security.V0_1
             var clientKeyExchangeMessage = new ClientKeyExchangeMessage();
             clientKeyExchangeMessage.SetFromNetMQMessage(incomingMessage);
 
-            var rsa = LocalCertificate.PrivateKey as RSACryptoServiceProvider;
+            using (var rsa = LocalCertificate.GetRSAPrivateKey()) // .PrivateKey as RSACryptoServiceProvider;
+            {
+                byte[] premasterSecret = rsa.Decrypt(clientKeyExchangeMessage.EncryptedPreMasterSecret, RSAEncryptionPadding.Pkcs1); // false);
 
-            byte[] premasterSecret = rsa.Decrypt(clientKeyExchangeMessage.EncryptedPreMasterSecret, false);
-
-            GenerateMasterSecret(premasterSecret);
-
+                GenerateMasterSecret(premasterSecret);
+            }
             InvokeChangeCipherSuite();
         }
 
@@ -453,11 +462,13 @@ namespace NetMQ.Security.V0_1
             var finishedMessage = new FinishedMessage();
             finishedMessage.SetFromNetMQMessage(incomingMessage);
 
-            m_remoteHash.TransformFinalBlock(EmptyArray<byte>.Instance, 0, 0);
+            //m_remoteHash.TransformFinalBlock(EmptyArray<byte>.Instance, 0, 0);
 
-            byte[] seed = m_remoteHash.Hash;
+            byte[] seed = new byte[m_remoteHashBytes.Length];
+            Buffer.BlockCopy(m_remoteHashBytes, 0, seed, 0, m_remoteHashBytes.Length); //.Hash;
             m_remoteHash.Dispose();
             m_remoteHash = null;
+            m_remoteHashBytes = null;
 
             var label = SecurityParameters.Entity == ConnectionEnd.Client ? ServerFinishedLabel : ClientFinshedLabel;
 
@@ -478,11 +489,13 @@ namespace NetMQ.Security.V0_1
 
         private void AddFinished(OutgoingMessageBag outgoingMessages)
         {
-            m_localHash.TransformFinalBlock(EmptyArray<byte>.Instance, 0, 0);
+            //m_localHash.TransformFinalBlock(EmptyArray<byte>.Instance, 0, 0);
 
-            byte[] seed = m_localHash.Hash;
+            byte[] seed = new byte[m_localHashBytes.Length];
+            Buffer.BlockCopy(m_localHashBytes, 0, seed, 0, m_localHashBytes.Length); //.Hash;
             m_localHash.Dispose();
             m_localHash = null;
+            m_localHashBytes = null;
 
             var label = SecurityParameters.Entity == ConnectionEnd.Server ? ServerFinishedLabel : ClientFinshedLabel;
 
